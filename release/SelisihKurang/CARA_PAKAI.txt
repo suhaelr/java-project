@@ -1,0 +1,14 @@
+﻿SELISIH KURANG - Rekonsiliasi RC vs EJ
+======================================
+
+CARA PAKAI (tanpa install apapun):
+  1. Double-click: SelisihKurang.exe
+  2. Browse File RC dan File EJ (contoh ada di folder samples\)
+  3. Klik Rekon
+  4. Lihat hasil di tab Match / Nasabah Diuntungkan / ACQ
+  5. Tab Berita Acara -> Print Berita Acara
+
+Tidak perlu install Java. Tidak perlu build.
+Cukup copy seluruh folder ini ke laptop manapun (Windows 64-bit).
+
+Folder samples\ berisi data contoh untuk dicoba.
