@@ -1,0 +1,12 @@
+build/
+dist/
+release/
+target/
+node_modules/
+*.class
+page-*.png
+extract-*.mjs
+package.json
+package-lock.json
+.DS_Store
+Thumbs.db
