@@ -126,8 +126,8 @@ public class MainFrame extends JFrame {
         gbc.anchor = GridBagConstraints.WEST;
         gbc.fill = GridBagConstraints.HORIZONTAL;
 
-        addFileRow(files, gbc, 0, "File RC:", rcFileField);
-        addFileRow(files, gbc, 1, "File EJ:", ejFileField);
+        addFileRow(files, gbc, 0, "File RC:", rcFileField, com.selisihkurang.model.Source.RC);
+        addFileRow(files, gbc, 1, "File EJ:", ejFileField, com.selisihkurang.model.Source.EJ);
 
         JPanel filterPanel = new JPanel(new GridBagLayout());
         filterPanel.setBorder(BorderFactory.createTitledBorder("Filter Rekonsiliasi"));
@@ -167,7 +167,8 @@ public class MainFrame extends JFrame {
         return panel;
     }
 
-    private void addFileRow(JPanel panel, GridBagConstraints gbc, int row, String label, JTextField field) {
+    private void addFileRow(JPanel panel, GridBagConstraints gbc, int row, String label,
+                            JTextField field, com.selisihkurang.model.Source source) {
         gbc.gridx = 0;
         gbc.gridy = row;
         gbc.weightx = 0;
@@ -178,7 +179,7 @@ public class MainFrame extends JFrame {
         gbc.gridx = 2;
         gbc.weightx = 0;
         JButton browse = new JButton("Browse");
-        browse.addActionListener(e -> chooseFile(field));
+        browse.addActionListener(e -> chooseFile(field, source));
         panel.add(browse, gbc);
     }
 
@@ -189,54 +190,59 @@ public class MainFrame extends JFrame {
         return new JScrollPane(table);
     }
 
-    private void chooseFile(JTextField target) {
+    private void chooseFile(JTextField target, com.selisihkurang.model.Source source) {
         JFileChooser chooser = new JFileChooser();
         chooser.setFileFilter(new FileNameExtensionFilter("Text Files", "txt", "csv", "dat"));
         if (chooser.showOpenDialog(this) == JFileChooser.APPROVE_OPTION) {
             File file = chooser.getSelectedFile();
             target.setText(file.getAbsolutePath());
-            autoDetectFilters(file.getAbsolutePath());
+            refreshFiltersFromFiles();
         }
     }
 
-    private void autoDetectFilters(String path) {
-        try {
-            List<Transaction> sample = parser.parse(Path.of(path), com.selisihkurang.model.Source.RC);
-            if (sample.isEmpty()) {
+    private void refreshFiltersFromFiles() {
+        RangeAccumulator acc = new RangeAccumulator();
+        acc.addFile(rcFileField.getText().trim(), com.selisihkurang.model.Source.RC);
+        acc.addFile(ejFileField.getText().trim(), com.selisihkurang.model.Source.EJ);
+
+        if (acc.minDate != null) {
+            tanggalAwalField.setText(ParseUtil.formatDate(acc.minDate));
+            tanggalAkhirField.setText(ParseUtil.formatDate(acc.maxDate));
+        }
+        if (acc.minRec != Long.MAX_VALUE) {
+            recordAwalField.setText(String.valueOf(acc.minRec));
+            recordAkhirField.setText(String.valueOf(acc.maxRec));
+        }
+    }
+
+    private final class RangeAccumulator {
+        private LocalDate minDate;
+        private LocalDate maxDate;
+        private long minRec = Long.MAX_VALUE;
+        private long maxRec;
+
+        void addFile(String path, com.selisihkurang.model.Source source) {
+            if (path.isEmpty()) {
                 return;
             }
-            LocalDate min = null;
-            LocalDate max = null;
-            long minRec = Long.MAX_VALUE;
-            long maxRec = 0;
-            for (Transaction tx : sample) {
-                if (tx.tanggal() != null) {
-                    if (min == null || tx.tanggal().isBefore(min)) {
-                        min = tx.tanggal();
+            try {
+                for (Transaction tx : parser.parse(Path.of(path), source)) {
+                    if (tx.tanggal() != null) {
+                        if (minDate == null || tx.tanggal().isBefore(minDate)) {
+                            minDate = tx.tanggal();
+                        }
+                        if (maxDate == null || tx.tanggal().isAfter(maxDate)) {
+                            maxDate = tx.tanggal();
+                        }
                     }
-                    if (max == null || tx.tanggal().isAfter(max)) {
-                        max = tx.tanggal();
+                    if (tx.record() > 0) {
+                        minRec = Math.min(minRec, tx.record());
+                        maxRec = Math.max(maxRec, tx.record());
                     }
                 }
-                if (tx.record() > 0) {
-                    minRec = Math.min(minRec, tx.record());
-                    maxRec = Math.max(maxRec, tx.record());
-                }
+            } catch (Exception ignored) {
+                // auto-detect is best-effort
             }
-            if (min != null && tanggalAwalField.getText().isBlank()) {
-                tanggalAwalField.setText(ParseUtil.formatDate(min));
-            }
-            if (max != null && tanggalAkhirField.getText().isBlank()) {
-                tanggalAkhirField.setText(ParseUtil.formatDate(max));
-            }
-            if (minRec != Long.MAX_VALUE && recordAwalField.getText().isBlank()) {
-                recordAwalField.setText(String.valueOf(minRec));
-            }
-            if (maxRec > 0 && recordAkhirField.getText().isBlank()) {
-                recordAkhirField.setText(String.valueOf(maxRec));
-            }
-        } catch (Exception ignored) {
-            // auto-detect is best-effort
         }
     }
 

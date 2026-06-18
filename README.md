@@ -46,7 +46,7 @@ Dalam operasional settlement ATM/CRM, petugas harus memastikan catatan **sistem 
 ### Input & Rekonsiliasi
 - Browse dan muat file **RC** dan **EJ** (format TXT/CSV)
 - Filter berdasarkan **Tanggal Awal/Akhir** dan **Record Awal/Akhir**
-- Auto-detect rentang tanggal/record saat browse file
+- Auto-detect rentang tanggal/record dari **RC dan EJ** saat browse (gabungan min–max keduanya)
 - Proses rekon di background thread (UI tidak freeze)
 - Parser otomatis: format **RC (RK_*.txt)** dan **EJ (EJ.TXT)** produksi, plus fallback tabular lama
 
@@ -111,13 +111,25 @@ Dalam operasional settlement ATM/CRM, petugas harus memastikan catatan **sistem 
 
 ### Contoh dengan data sample
 Folder `samples/` berisi:
-- `sample-rc.txt` — format RC asli (semicolon, `RK_*.txt`)
-- `sample-ej.txt` — format EJ asli (journal `EJ.TXT`)
+- `sample-rc.txt` — **32 transaksi** format RC asli (`RK_*.txt`, semicolon), tanggal `06/12/26`, record `5780`–`5821` (baris OTHR/REST diabaikan)
+- `sample-ej.txt` — **1 transaksi** format EJ asli (`EJ.TXT`, journal), tanggal `09/06/2026`, record `4982` (deposit Rp 50.000)
 - `format data RC.jpeg` / `format data EJ.jpeg` — screenshot referensi format produksi
 
-Gunakan filter: tanggal `06-12-2026` s/d `06-12-2026`, record `5780`–`5810`.
+**Cara uji di aplikasi:**
+1. Browse `sample-rc.txt` lalu `sample-ej.txt`
+2. Filter otomatis terisi gabungan: tanggal `09-06-2026` s/d `06-12-2026`, record `4982`–`5821`
+3. Klik **Rekon**
 
-Hasil yang diharapkan: **4 Match**, **2 ACQ**, **Nasabah Diuntungkan** terdeteksi.
+**Hasil yang diharapkan** (sample saat ini dari screenshot berbeda periode):
+| Metrik | Nilai | Keterangan |
+|--------|-------|------------|
+| RC terbaca | 32 | Semua transaksi RC dalam filter |
+| EJ terbaca | 1 | Satu blok journal deposit |
+| Match | 0 | Record EJ `4982` tidak ada di RC |
+| ACQ | 1 | EJ record `4982` — ada di EJ, tidak di RC |
+| RC Suspect | 32 | RC belum punya pasangan EJ (file EJ sample hanya 1 transaksi) |
+
+> **Catatan:** `sample-rc.txt` dan `sample-ej.txt` diambil dari screenshot format yang **belum tentu periode sama**. Untuk uji Match penuh, gunakan file RC dan EJ **periode yang sama** dari mesin CRM Anda.
 
 ---
 
@@ -225,9 +237,9 @@ Parser: `RcFileParser.java`
 Format **journal multi-baris**. Setiap transaksi diawali `TRANSACTION START`.
 
 **Field penting dalam blok:**
-- Timestamp: `06/12/2026 08:15:22`
-- `CARD NUMBER 526422******3795` (kartu masked)
-- `TRAN SEQ NR [5780]` → **record** untuk matching
+- Timestamp: `09/06/2026 00:48:25`
+- `CARD NUMBER 526422******8045` atau `Card Number [526422******8045]` (kartu masked, kurung `[]` dibersihkan otomatis)
+- `TRAN SEQ NR [4982]` → **record** untuk matching
 - `Amount : 50000` / `TOTAL AMOUNT IDR 50000`
 - Tipe: `WITHDRAWAL`/`DISPENSE` = penarikan (`D`), `Cash Deposit`/`DEPOSIT Button` = setoran (`K`)
 - Flag suspect: `SUSPECT`, `FAIL`, `TIMEOUT`, `HOST DECLINE`
@@ -304,6 +316,8 @@ lastResult = reconciliationService.reconcile(rcData, ejData, filter);
 
 ### Tahap 1 — Filter
 Hanya transaksi dalam rentang tanggal dan record yang dipilih user (`ReconciliationFilter.java`).
+
+Saat **Browse** file RC atau EJ, aplikasi membaca kedua file (jika sudah dipilih) dan mengisi filter dengan **gabungan** tanggal/record terkecil–terbesar dari RC **dan** EJ. Ini mencegah transaksi EJ ter-exclude jika tanggalnya berbeda dari RC.
 
 ### Tahap 2 — Indexing (O(n))
 Data diindeks di `HashMap` untuk pencarian cepat:
@@ -536,12 +550,24 @@ java -cp "build/classes;build/test-classes" com.selisihkurang.ReportPreviewTest
 # Output: build/report-preview.html
 ```
 
-### Hasil uji sample data
+### Hasil uji sample data (`samples/sample-rc.txt` + `samples/sample-ej.txt`)
+
+Filter: tanggal `09-06-2026` s/d `06-12-2026`, record `4982`–`5821`
+
 | Metrik | Nilai |
 |--------|-------|
-| Match | 4 transaksi |
-| ACQ | 2 transaksi (record 6500, 6510) |
-| Nasabah Diuntungkan | 1 transaksi (record 6490, Norek terisi) |
+| RC terbaca | 32 transaksi |
+| EJ terbaca | 1 transaksi (record 4982, deposit Rp 50.000) |
+| Match | 0 |
+| ACQ | 1 transaksi (record 4982) |
+| RC Suspect | 32 transaksi (belum ada pasangan EJ) |
+
+Verifikasi manual:
+```powershell
+.\build.ps1
+javac -encoding UTF-8 -d build/test-classes -cp build/classes src/test/java/com/selisihkurang/ManualTest.java
+java -cp "build/classes;build/test-classes" com.selisihkurang.ManualTest
+```
 
 ---
 

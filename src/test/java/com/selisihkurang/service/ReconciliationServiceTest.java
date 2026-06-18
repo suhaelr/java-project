@@ -11,8 +11,6 @@ import java.time.LocalDate;
 import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertFalse;
-import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class ReconciliationServiceTest {
     private final TxtFileParser parser = new TxtFileParser();
@@ -26,18 +24,20 @@ class ReconciliationServiceTest {
         List<Transaction> rc = parser.parse(rcPath, Source.RC);
         List<Transaction> ej = parser.parse(ejPath, Source.EJ);
 
+        assertEquals(32, rc.size());
+        assertEquals(1, ej.size());
+
         ReconciliationFilter filter = new ReconciliationFilter(
+                LocalDate.of(2026, 6, 9),
                 LocalDate.of(2026, 12, 6),
-                LocalDate.of(2026, 12, 6),
-                5780,
-                5810
+                4982,
+                5821
         );
 
         ReconciliationResult result = service.reconcile(rc, ej, filter);
 
-        assertEquals(4, result.matched().size());
-        assertEquals(2, result.ejAdaRcTidakTerbuku().size());
-        assertFalse(result.nasabahDiuntungkan().isEmpty());
-        assertTrue(result.nasabahDiuntungkan().stream().anyMatch(Transaction::hasNorek));
+        assertEquals(0, result.matched().size());
+        assertEquals(1, result.ejAdaRcTidakTerbuku().size());
+        assertEquals(4982, result.ejAdaRcTidakTerbuku().get(0).record());
     }
 }

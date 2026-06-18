@@ -20,12 +20,14 @@ public final class ManualTest {
         List<Transaction> ej = parser.parse(Path.of("samples/sample-ej.txt"), Source.EJ);
 
         ReconciliationResult result = service.reconcile(rc, ej, new ReconciliationFilter(
+                LocalDate.of(2026, 6, 9),
                 LocalDate.of(2026, 12, 6),
-                LocalDate.of(2026, 12, 6),
-                5780,
-                5810
+                4982,
+                5821
         ));
 
+        System.out.println("RC parsed: " + rc.size());
+        System.out.println("EJ parsed: " + ej.size());
         System.out.println("Match: " + result.matched().size());
         System.out.println("ACQ: " + result.ejAdaRcTidakTerbuku().size());
         System.out.println("Nasabah Diuntungkan: " + result.nasabahDiuntungkan().size());

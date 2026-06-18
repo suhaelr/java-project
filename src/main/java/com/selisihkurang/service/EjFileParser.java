@@ -109,7 +109,7 @@ public final class EjFileParser {
 
             Matcher cardMatcher = CARD_NUMBER.matcher(message);
             if (cardMatcher.find()) {
-                block.card = cardMatcher.group(1).trim();
+                block.card = normalizeCard(cardMatcher.group(1));
             }
 
             Matcher seqMatcher = TRAN_SEQ.matcher(message);
@@ -170,6 +170,14 @@ public final class EjFileParser {
             }
         }
         return hits >= 3;
+    }
+
+    private static String normalizeCard(String raw) {
+        String card = raw.trim();
+        if (card.startsWith("[") && card.endsWith("]")) {
+            card = card.substring(1, card.length() - 1).trim();
+        }
+        return card;
     }
 
     private static final class EjBlock {
