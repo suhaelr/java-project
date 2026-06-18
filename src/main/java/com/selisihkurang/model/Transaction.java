@@ -1,5 +1,7 @@
 package com.selisihkurang.model;
 
+import com.selisihkurang.util.ParseUtil;
+
 import java.time.LocalDate;
 import java.util.Objects;
 
@@ -81,7 +83,7 @@ public final class Transaction {
     }
 
     public String looseKey() {
-        return tanggal + "|" + card + "|" + amount + "|" + type;
+        return tanggal + "|" + ParseUtil.cardMatchKey(card) + "|" + amount + "|" + ParseUtil.normalizeType(type);
     }
 
     @Override

@@ -4,8 +4,8 @@ import com.selisihkurang.model.MatchedPair;
 import com.selisihkurang.model.ReconciliationFilter;
 import com.selisihkurang.model.ReconciliationResult;
 import com.selisihkurang.model.SettlementSummary;
-import com.selisihkurang.model.Source;
 import com.selisihkurang.model.Transaction;
+import com.selisihkurang.util.ParseUtil;
 
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -162,7 +162,10 @@ public final class ReconciliationService {
         if (rc.amount() != ej.amount()) {
             return false;
         }
-        if (!rc.type().isEmpty() && !ej.type().isEmpty() && !rc.type().equalsIgnoreCase(ej.type())) {
+        if (!ParseUtil.typesCompatible(rc.type(), ej.type())) {
+            return false;
+        }
+        if (!ParseUtil.cardsMatch(rc.card(), ej.card())) {
             return false;
         }
         return true;
@@ -197,19 +200,13 @@ public final class ReconciliationService {
     }
 
     private boolean isWithdrawal(Transaction tx) {
-        String type = tx.type();
-        return type.contains("W")
-                || type.contains("TARIK")
-                || type.contains("DISPENSE")
-                || (tx.amount() < 0 && !type.contains("S") && !type.contains("SETOR"));
+        String norm = ParseUtil.normalizeType(tx.type());
+        return norm.equals("D");
     }
 
     private boolean isDeposit(Transaction tx) {
-        String type = tx.type();
-        return type.contains("S")
-                || type.contains("SETOR")
-                || type.contains("DEPOSIT")
-                || (tx.amount() > 0 && type.contains("K"));
+        String norm = ParseUtil.normalizeType(tx.type());
+        return norm.equals("K");
     }
 
     private List<Transaction> distinct(List<Transaction> list) {

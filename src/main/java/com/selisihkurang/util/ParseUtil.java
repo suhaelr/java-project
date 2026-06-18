@@ -98,4 +98,48 @@ public final class ParseUtil {
         }
         return date.format(DateTimeFormatter.ofPattern("dd-MM-yyyy"));
     }
+
+    public static String digitsOnly(String value) {
+        if (value == null) {
+            return "";
+        }
+        return value.replaceAll("[^0-9]", "");
+    }
+
+    /** Kunci card untuk matching: 6 digit awal + 4 digit akhir (dukung kartu masked EJ). */
+    public static String cardMatchKey(String card) {
+        String digits = digitsOnly(card);
+        if (digits.length() < 10) {
+            return digits;
+        }
+        return digits.substring(0, 6) + digits.substring(digits.length() - 4);
+    }
+
+    public static boolean cardsMatch(String a, String b) {
+        if (a == null || b == null || a.isBlank() || b.isBlank()) {
+            return true;
+        }
+        return cardMatchKey(a).equals(cardMatchKey(b));
+    }
+
+    public static String normalizeType(String type) {
+        if (type == null || type.isBlank()) {
+            return "";
+        }
+        String t = type.trim().toUpperCase();
+        if (t.equals("W") || t.equals("D") || t.contains("TARIK") || t.contains("DISPENSE")) {
+            return "D";
+        }
+        if (t.equals("K") || t.equals("S") || t.contains("SETOR") || t.contains("DEPOSIT")) {
+            return "K";
+        }
+        return t;
+    }
+
+    public static boolean typesCompatible(String a, String b) {
+        if (a == null || b == null || a.isBlank() || b.isBlank()) {
+            return true;
+        }
+        return normalizeType(a).equals(normalizeType(b));
+    }
 }

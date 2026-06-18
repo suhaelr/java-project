@@ -48,7 +48,7 @@ Dalam operasional settlement ATM/CRM, petugas harus memastikan catatan **sistem 
 - Filter berdasarkan **Tanggal Awal/Akhir** dan **Record Awal/Akhir**
 - Auto-detect rentang tanggal/record saat browse file
 - Proses rekon di background thread (UI tidak freeze)
-- Parser fleksibel: delimiter tab, pipe (`|`), titik koma (`;`)
+- Parser otomatis: format **RC (RK_*.txt)** dan **EJ (EJ.TXT)** produksi, plus fallback tabular lama
 
 ### Tab Hasil Rekonsiliasi
 | Tab | Isi |
@@ -111,10 +111,13 @@ Dalam operasional settlement ATM/CRM, petugas harus memastikan catatan **sistem 
 
 ### Contoh dengan data sample
 Folder `samples/` berisi:
-- `sample-rc.txt` — 6 transaksi contoh RC
-- `sample-ej.txt` — 6 transaksi contoh EJ
+- `sample-rc.txt` — format RC asli (semicolon, `RK_*.txt`)
+- `sample-ej.txt` — format EJ asli (journal `EJ.TXT`)
+- `format data RC.jpeg` / `format data EJ.jpeg` — screenshot referensi format produksi
 
-Gunakan filter: tanggal `03-05-2026` s/d `10-05-2026`, record `6480`–`6510`.
+Gunakan filter: tanggal `06-12-2026` s/d `06-12-2026`, record `5780`–`5810`.
+
+Hasil yang diharapkan: **4 Match**, **2 ACQ**, **Nasabah Diuntungkan** terdeteksi.
 
 ---
 
@@ -188,45 +191,66 @@ $env:JAVA_HOME = "C:\Program Files\Java\jdk-26.0.1"
 
 ## Format File Input (RC & EJ)
 
-### Delimiter yang didukung
-Parser otomatis mendeteksi:
-- Tab (`\t`) — paling umum
-- Pipe (`|`)
-- Titik koma (`;`)
-- Koma (`,`) — jika tidak ada delimiter lain
+Program mendeteksi format file secara otomatis lewat `TxtFileParser` yang mendelegasikan ke parser khusus.
+
+### Format RC — file `RK_*.txt` (Recon/ICONS)
+
+Satu transaksi per baris, **7 field** dipisah titik koma (`;`):
+
+```
+card/bank;terminal/record/ref;detail;amount;type;balance;date
+```
+
+**Contoh baris:**
+```
+5264222571513795/BNI;S1BBBIR018/5780/188700;0210/S1BBBIR018/5780/ 5264222571513795/1889058327/VL;4000000;D;751800000;06/12/26
+```
+
+| Field | Isi | Keterangan |
+|-------|-----|------------|
+| 1 | `5264222571513795/BNI` | Nomor kartu / kode bank |
+| 2 | `S1BBBIR018/5780/188700` | Terminal / **record** / referensi |
+| 3 | Detail transaksi | Berisi norek 10 digit, kode VL/VK |
+| 4 | `4000000` | Nominal (integer) |
+| 5 | `D` atau `K` | `D` = penarikan, `K` = setoran |
+| 6 | Saldo | Saldo setelah transaksi |
+| 7 | `06/12/26` | Tanggal `DD/MM/YY` |
+
+**Baris yang diabaikan:** bank `OTHR`, detail berisi `/REST/` (restocking).
+
+Parser: `RcFileParser.java`
+
+### Format EJ — file `EJ.TXT` (Electronic Journal)
+
+Format **journal multi-baris**. Setiap transaksi diawali `TRANSACTION START`.
+
+**Field penting dalam blok:**
+- Timestamp: `06/12/2026 08:15:22`
+- `CARD NUMBER 526422******3795` (kartu masked)
+- `TRAN SEQ NR [5780]` → **record** untuk matching
+- `Amount : 50000` / `TOTAL AMOUNT IDR 50000`
+- Tipe: `WITHDRAWAL`/`DISPENSE` = penarikan (`D`), `Cash Deposit`/`DEPOSIT Button` = setoran (`K`)
+- Flag suspect: `SUSPECT`, `FAIL`, `TIMEOUT`, `HOST DECLINE`
+
+Parser: `EjFileParser.java`
+
+### Matching RC ↔ EJ
+
+- **Record** utama: angka di field 2 RC (mis. `5780`) = `TRAN SEQ NR [5780]` di EJ
+- **Kartu masked:** dibandingkan 6 digit awal + 4 digit akhir (`526422` + `3795`)
+- **Tipe:** `D`/`W` = penarikan, `K`/`S` = setoran
+
+### Fallback — format tabular lama
+
+Jika file tidak cocok format RC/EJ di atas, parser fallback mendukung delimiter tab, pipe, titik koma dengan header kolom.
 
 ### Encoding
 Dicoba berurutan: **UTF-8** → **Windows-1252** → **ISO-8859-1**
 
-### Header
-Baris pertama boleh berisi nama kolom. Jika tidak ada header, parser mengasumsikan urutan:
-
-```
-Tanggal | Card | Norek | Record | Type | Amount
-```
-
-### Kolom yang dikenali (case-insensitive)
-
-| Field | Nama kolom yang dikenali |
-|-------|--------------------------|
-| Tanggal | `tanggal`, `date`, `tgl`, `trxdate`, `transactiondate` |
-| Card | `card`, `nokartu`, `kartu`, `cardno`, `pan` |
-| Norek | `norek`, `norekening`, `rekening`, `account`, `accountno` |
-| Record | `record`, `recnum`, `norecord`, `recordno`, `seq`, `sequenceno` |
-| Type | `type`, `jenis`, `rectype`, `trxtype`, `kode` |
-| Amount | `amount`, `nominal`, `jumlah`, `nilai`, `amt` |
-| Suspect | `suspect`, `status`, `keterangan`, `flag` |
-
-### Contoh file valid
-
-```text
-Tanggal	Card	Norek	Record	Type	Amount	Status
-03/05/2026	6019001234567890	0015360100001234	6480	W	500000
-03/05/2026	6019009876543210		6481	W	1000000	SUSPECT
-```
-
 ### Kode parser
-Implementasi: `src/main/java/com/selisihkurang/service/TxtFileParser.java`
+- `TxtFileParser.java` — router deteksi format
+- `RcFileParser.java` — parse RC semicolon
+- `EjFileParser.java` — parse EJ journal
 
 ---
 
@@ -409,7 +433,9 @@ java-project/
 │   └── HasilRekonsiliasiData.java # Kolom Excel A–R + rumus
 │
 ├── service/                       # Logika bisnis
-│   ├── TxtFileParser.java         # Baca & parse file TXT → Transaction
+│   ├── TxtFileParser.java         # Router parser RC/EJ/tabular
+│   ├── RcFileParser.java          # Parse RK_*.txt (semicolon)
+│   ├── EjFileParser.java          # Parse EJ.TXT (journal)
 │   ├── ReconciliationService.java # CORE: cocokkan RC vs EJ
 │   ├── HasilRekonsiliasiService.java # Gabung data → Excel A–R
 │   └── ReportGenerator.java       # Generate HTML Berita Acara
@@ -446,7 +472,7 @@ java-project/
 
 | Ingin ubah... | Edit file |
 |---------------|-----------|
-| Format baca TXT produksi bank | `TxtFileParser.java` |
+| Format TXT produksi bank | `RcFileParser.java`, `EjFileParser.java`, `TxtFileParser.java` |
 | Aturan Match / ACQ / Nasabah Diuntungkan | `ReconciliationService.java` |
 | Tampilan tab / tombol / alur UI | `MainFrame.java` |
 | Rumus Excel A–R | `HasilRekonsiliasiData.java` |
@@ -544,7 +570,7 @@ Agar software **100% akurat** dengan data produksi, minta rekan kirim:
 | Area | Status |
 |------|--------|
 | Vendor Kurang Setor | ❌ Belum diimplementasi |
-| Format TXT produksi bank | ⚠️ Parser generik — perlu penyesuaian setelah uji file asli |
+| Format TXT produksi bank | ✅ Parser RC (`RK_*.txt`) & EJ (`EJ.TXT`) sesuai format produksi |
 | Logo perusahaan di laporan | ❌ Kotak kosong (belum ada gambar logo) |
 | Import Excel langsung | ❌ Belum — input via form aplikasi |
 | Download otomatis RC/EJ | ❌ Belum — file dipilih manual (Browse) |
@@ -554,7 +580,7 @@ Agar software **100% akurat** dengan data produksi, minta rekan kirim:
 
 ## Roadmap / Pengembangan Lanjutan
 
-- [ ] Sesuaikan `TxtFileParser` dengan format TXT produksi bank
+- [x] Sesuaikan parser dengan format TXT produksi bank (RC semicolon + EJ journal)
 - [ ] Validasi hasil vs Excel manual rekan (regression test)
 - [ ] Tambah logo perusahaan di `ReportGenerator`
 - [ ] Export PDF native (selain HTML print)

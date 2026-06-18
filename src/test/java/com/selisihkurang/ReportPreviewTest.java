@@ -23,7 +23,7 @@ public final class ReportPreviewTest {
         List<Transaction> rc = parser.parse(Path.of("samples/sample-rc.txt"), Source.RC);
         List<Transaction> ej = parser.parse(Path.of("samples/sample-ej.txt"), Source.EJ);
         ReconciliationResult result = service.reconcile(rc, ej, new ReconciliationFilter(
-                LocalDate.of(2026, 5, 3), LocalDate.of(2026, 5, 10), 6480, 6510));
+                LocalDate.of(2026, 12, 6), LocalDate.of(2026, 12, 6), 5780, 5810));
 
         BeritaAcaraData data = new BeritaAcaraData();
         data.setCrmId("S1JBMSR012");

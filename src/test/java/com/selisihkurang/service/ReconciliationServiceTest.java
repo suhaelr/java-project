@@ -27,10 +27,10 @@ class ReconciliationServiceTest {
         List<Transaction> ej = parser.parse(ejPath, Source.EJ);
 
         ReconciliationFilter filter = new ReconciliationFilter(
-                LocalDate.of(2026, 5, 3),
-                LocalDate.of(2026, 5, 10),
-                6480,
-                6510
+                LocalDate.of(2026, 12, 6),
+                LocalDate.of(2026, 12, 6),
+                5780,
+                5810
         );
 
         ReconciliationResult result = service.reconcile(rc, ej, filter);
